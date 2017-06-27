@@ -1,0 +1,98 @@
+import org.aspectj.bridge.IMessage
+import org.aspectj.bridge.MessageHandler
+import org.aspectj.tools.ajc.Main
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'org.aspectj:aspectjtools:1.8.9'
+    }
+}
+
+apply plugin: 'com.android.application'
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    isLibrary = false
+}
+
+android {
+    buildTypes {
+        release {
+            //是否zip优化
+            zipAlignEnabled true
+            //是否移除无用的资源，造成：specified for property 'resourceFile' does not exist.
+            //shrinkResources true
+            //是否混淆
+            minifyEnabled true
+            //混淆配置文件
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileSdkVersion 19
+    buildToolsVersion '25.0.0'
+}
+
+final def log = project.logger
+final def variants = project.android.applicationVariants
+
+variants.all { variant ->
+    if (!variant.buildType.isDebuggable()) {
+        log.debug("Skipping non-debuggable build type '${variant.buildType.name}'.")
+        return;
+    }
+
+    JavaCompile javaCompile = variant.javaCompile
+    javaCompile.doLast {
+        String[] args = ["-showWeaveInfo",
+                         "-1.8",
+                         "-inpath", javaCompile.destinationDir.toString(),
+                         "-aspectpath", javaCompile.classpath.asPath,
+                         "-d", javaCompile.destinationDir.toString(),
+                         "-classpath", javaCompile.classpath.asPath,
+                         "-bootclasspath", project.android.bootClasspath.join(File.pathSeparator)]
+        log.debug "ajc args: " + Arrays.toString(args)
+
+        MessageHandler handler = new MessageHandler(true);
+        new Main().run(args, handler);
+        for (IMessage message : handler.getMessages(null, true)) {
+            switch (message.getKind()) {
+                case IMessage.ABORT:
+                case IMessage.ERROR:
+                case IMessage.FAIL:
+                    log.error message.message, message.thrown
+                    break;
+                case IMessage.WARNING:
+                    log.warn message.message, message.thrown
+                    break;
+                case IMessage.INFO:
+                    log.info message.message, message.thrown
+                    break;
+                case IMessage.DEBUG:
+                    log.debug message.message, message.thrown
+                    break;
+            }
+        }
+    }
+}
+
+
+dependencies {
+    compile 'com.alibaba:fastjson:1.1.55.android'
+    compile project(':library:WheelPicker')
+    compile project(':library:FilePicker')
+    compile project(':library:ColorPicker')
+    compile project(':aspectj')
+    //    compile files('libs/AndroidPicker-1.5.2.jar')
+    //    compile 'cn.qqtheme.framework:WheelPicker:latest.release'
+    //    compile 'cn.qqtheme.framework:FilePicker:latest.release'
+    //    compile 'cn.qqtheme.framework:ColorPicker:latest.release'
+    //    compile 'com.github.gzu-liyujiang.AndroidPicker:WheelPicker:1.5.2'
+    //    compile 'com.github.gzu-liyujiang.AndroidPicker:FilePicker:1.5.2'
+    //    compile 'com.github.gzu-liyujiang.AndroidPicker:ColorPicker:1.5.2'
+}
